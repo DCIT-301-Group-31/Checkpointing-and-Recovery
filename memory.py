@@ -19,6 +19,7 @@ class RAM:
     the checkpoint manager can create incremental checkpoints.
     """
 
+
     def __init__(self, num_pages: int) -> None:
         if num_pages <= 0:
             raise ValueError("num_pages must be positive")

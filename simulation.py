@@ -5,9 +5,19 @@ import os
 import sys
 import time
 import msvcrt
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+from rich.columns import Columns
+from rich.console import Console
+
 from config import GRID_WIDTH, GRID_HEIGHT, STABLE_STORAGE_PATH, CHECKPOINT_INTERVAL
 from process_state import Process
 from checkpoint_manager import CheckpointManager
+
+console = Console()
+
 
 class Simulation:
     """Manages the simulation, UI, and user input."""
@@ -28,100 +38,94 @@ class Simulation:
 
     def run_loop(self):
         """The main event loop for the simulation."""
-        while True:
-            self.frame_count += 1
-            self.draw_grid()
-            self.status_message = "Running..."
+        with Live(self.draw_grid(), screen=True, redirect_stderr=False) as live:
+            while True:
+                self.frame_count += 1
+                
+                # --- Process Logic ---
+                self.process.step()
 
-            # --- Process Logic ---
-            self.process.step()
-
-            # --- Checkpoint Daemon Simulation ---
-            if self.process.program_counter % CHECKPOINT_INTERVAL == 0:
-                self.status_message = self.manager.save_checkpoint(self.process, is_full=False)
-
-            # --- Handle User Input (non-blocking) ---
-            if msvcrt.kbhit():
-                key = msvcrt.getch().decode('utf-8', errors='ignore').lower()
-                if key == 'q':
+                # --- Checkpoint Daemon Simulation ---
+                if self.process.program_counter % CHECKPOINT_INTERVAL == 0:
                     self.status_message = self.manager.save_checkpoint(self.process, is_full=False)
-                    self.draw_grid("Finalizing and saving state...")
+                    live.update(self.draw_grid("Checkpoint auto-saved..."))
                     time.sleep(0.5)
-                    break
-                elif key == 's':
-                    self.status_message = self.manager.save_checkpoint(self.process, is_full=False)
-                    self.draw_grid("SAVING...")
-                    time.sleep(0.5)
-                elif key == 'k':
-                    print("\n\n*** SIMULATED CRASH (K pressed)! ***")
-                    print("Run 'python main.py --recover' to restore from checkpoint.")
-                    sys.exit(1)
 
-            time.sleep(0.15)  # Control game speed
+                # --- Handle User Input (non-blocking) ---
+                if msvcrt.kbhit():
+                    key = msvcrt.getch().decode('utf-8', errors='ignore').lower()
+                    if key == 'q':
+                        self.status_message = self.manager.save_checkpoint(self.process, is_full=False)
+                        live.update(self.draw_grid("Finalizing and saving state..."))
+                        time.sleep(0.5)
+                        break
+                    elif key == 's':
+                        self.status_message = self.manager.save_checkpoint(self.process, is_full=False)
+                        live.update(self.draw_grid("SAVING CHECKPOINT..."))
+                        time.sleep(0.5)
+                    elif key == 'k':
+                        # We need to exit the live display before printing the crash message
+                        break  # Exit the loop first
+
+                live.update(self.draw_grid())
+                time.sleep(0.15)  # Control game speed
+
+        # This part runs after the loop breaks (e.g., on 'k' or 'q')
+        if msvcrt.kbhit() and msvcrt.getch().decode('utf-8', errors='ignore').lower() == 'k':
+            console.print("\n\n[bold red]*** SIMULATED CRASH (K pressed)! ***[/bold red]")
+            console.print("[yellow]Run 'python main.py --recover' to restore from the last checkpoint.[/yellow]")
+            sys.exit(1)
 
     def draw_grid(self, status_override=None):
-        """Draws the grid, agent, and status info."""
-        # Move cursor to top-left instead of clearing (reduces flicker)
-        print("\033[H", end="")
-        
+        """Draws the grid, agent, and status info using Rich."""
         agent_x, agent_y = self.process.registers['AX'], self.process.registers['BX']
-        
-        # Build the display as a single string for smoother output
-        lines = []
-        
-        # Game title
-        lines.append("\033[95m" + "=" * 40 + "\033[0m")
-        lines.append("\033[95m   CHECKPOINT RECOVERY GAME   \033[0m")
-        lines.append("\033[95m" + "=" * 40 + "\033[0m")
-        lines.append("")
-        
-        # Top border
-        lines.append("\033[36m+" + "-" * (GRID_WIDTH * 2) + "+\033[0m")
-        
-        # Grid
+
+        # --- Create the Grid Table ---
+        grid_table = Table.grid(expand=True)
+        for _ in range(self.process.width):
+            grid_table.add_column()
+
         for y in range(self.process.height):
-            row = "\033[36m|\033[0m"
+            row_cells = []
             for x in range(self.process.width):
                 cell_value = self.process.read_memory(x, y)
-                
                 if x == agent_x and y == agent_y:
-                    # Player - animated
                     player_chars = ["@", "*", "@", "O"]
                     char = player_chars[(self.frame_count // 2) % len(player_chars)]
-                    row += f"\033[92;1m{char}\033[0m "
+                    cell_content = Text(char, style="bold green")
                 elif cell_value > 0:
-                    # Coin - animated
                     coin_chars = ["o", "O", "0", "O"]
                     char = coin_chars[(self.frame_count + x + y) % len(coin_chars)]
-                    row += f"\033[93;1m{char}\033[0m "
+                    cell_content = Text(char, style="bold yellow")
                 else:
-                    row += ". "
-            row += "\033[36m|\033[0m"
-            lines.append(row)
+                    cell_content = Text(". ", style="dim white")
+                row_cells.append(cell_content)
+            grid_table.add_row(*row_cells)
         
-        # Bottom border
-        lines.append("\033[36m+" + "-" * (GRID_WIDTH * 2) + "+\033[0m")
-        lines.append("")
-        
-        # Status
+        grid_panel = Panel(grid_table, title="[cyan]Game World[/cyan]", border_style="cyan")
+
+        # --- Create Status and Stats Panels ---
         status = status_override if status_override else self.status_message
-        if "SAVING" in status or "Checkpoint" in status:
-            lines.append(f"Status: \033[91;1m{status}\033[0m")
-        else:
-            lines.append(f"Status: \033[97m{status}\033[0m")
-        
-        lines.append("")
-        
-        # Player stats
-        lines.append(f"\033[92mPlayer Position: ({agent_x}, {agent_y})\033[0m")
-        lines.append(f"\033[93;1mCoins Collected: {self.process.registers['CX']}\033[0m")
-        lines.append(f"Steps Taken: {self.process.program_counter}")
-        lines.append("")
-        
-        # Controls
-        lines.append("\033[36m------------ CONTROLS ------------\033[0m")
-        lines.append("[S] Save Checkpoint  [K] Crash  [Q] Quit")
-        lines.append("")
-        
-        # Print all at once
-        print("\n".join(lines))
+        status_style = "bold red" if "SAVING" in status or "Checkpoint" in status else "white"
+        status_panel = Panel(Text(status, justify="center", style=status_style), title="[white]Status[/white]", border_style="red")
+
+        stats_text = Text()
+        stats_text.append(f"Player Position: ({agent_x}, {agent_y})\n", style="green")
+        stats_text.append(f"Coins Collected: {self.process.registers['CX']}\n", style="bold yellow")
+        stats_text.append(f"Steps Taken: {self.process.program_counter}")
+        stats_panel = Panel(stats_text, title="[green]Player Stats[/green]", border_style="green")
+
+        # --- Create Controls Panel ---
+        controls_text = Text("[S] Save Checkpoint  [K] Crash  [Q] Quit", justify="center")
+        controls_panel = Panel(controls_text, title="[cyan]Controls[/cyan]", border_style="cyan")
+
+        # --- Assemble Layout ---
+        left_column = Columns([stats_panel, status_panel])
+        main_layout = Table.grid(expand=True)
+        main_layout.add_column()
+        main_layout.add_row(Text("CHECKPOINT RECOVERY GAME", style="bold magenta", justify="center"))
+        main_layout.add_row(grid_panel)
+        main_layout.add_row(left_column)
+        main_layout.add_row(controls_panel)
+
+        return main_layout

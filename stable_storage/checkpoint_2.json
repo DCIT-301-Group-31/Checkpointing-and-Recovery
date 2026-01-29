@@ -1,0 +1,23 @@
+{
+  "checkpoint_id": 2,
+  "timestamp": 1769687462.3123386,
+  "type": "INCREMENTAL",
+  "parent_checkpoint_id": 1,
+  "process_context": {
+    "program_counter": 131,
+    "registers": {
+      "AX": 4,
+      "BX": 7,
+      "CX": 7
+    }
+  },
+  "memory_payload": {
+    "40": "BQ==",
+    "47": "AQ==",
+    "67": "Ag==",
+    "68": "BQ==",
+    "80": "Aw==",
+    "82": "AA==",
+    "93": "AA=="
+  }
+}

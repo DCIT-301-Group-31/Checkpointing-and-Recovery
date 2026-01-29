@@ -1,18 +1,25 @@
 {
   "checkpoint_id": 4,
-  "timestamp": 1769687712.1243937,
+  "timestamp": 1769688834.332605,
   "type": "INCREMENTAL",
   "parent_checkpoint_id": 1,
   "process_context": {
-    "program_counter": 52,
+    "program_counter": 417,
     "registers": {
-      "AX": 8,
+      "AX": 7,
       "BX": 9,
-      "CX": 3
+      "CX": 31
     }
   },
   "memory_payload": {
-    "49": "AA==",
-    "54": "BQ=="
+    "23": "BQ==",
+    "32": "Ag==",
+    "45": "AQ==",k
+    "47": "AA==",
+    "51": "Aw==",
+    "77": "BA==",
+    "78": "AA==",
+    "88": "AA==",
+    "98": "AA=="
   }
 }

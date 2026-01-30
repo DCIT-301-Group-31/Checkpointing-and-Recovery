@@ -11,3 +11,4 @@ STABLE_STORAGE_PATH = './stable_storage/'
 
 # --- Checkpointing Configuration ---
 CHECKPOINT_INTERVAL = 150  # Number of game loops between automatic incremental checkpoints
+# Done

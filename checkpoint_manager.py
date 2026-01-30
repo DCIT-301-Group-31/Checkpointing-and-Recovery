@@ -105,3 +105,4 @@ class CheckpointManager:
         process.program_counter = final_cp['process_context']['program_counter']
 
         return f"Recovery complete. Restored to state from Checkpoint {final_cp['checkpoint_id']}."
+# done
